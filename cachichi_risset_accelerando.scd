@@ -205,7 +205,7 @@ SynthDef(\resetExample, {
 	|out=0|
 	var reset = In.kr(~resetBusIx, 1); // all-time 0 except a 1
 	var env = EnvGen.ar(Env.perc(0.05,0.55), reset);
-	var sig = SinOsc.ar(100,0, 1.3);
+	var sig = SinOsc.ar(50,0, 0.5);
 
 	sig = CombN.ar(sig * env, 1, 10/12, 60);
 
@@ -222,19 +222,36 @@ k = Synth(\resetExample);
 
 
 
+(
+SynthDef(\toRissetTest, {
+	arg out = 0;
+	//test rissetFx
+	var sig = SinOsc.ar([440,543]/2, 0,0.5);
+	Out.ar(out, sig);
+}).add;
+)
+
+(
+~testFx.free;
+~testFx = Synth(\toRissetTest, [\out, ~buses[\rissetFX]]);
+)
+
+
 
 (
 //Takes an audio input and processes it through the risset envelope.
 SynthDef(\rissetFX, {
-	arg in, out=0, amp=1,atk=0.05, sus=0.3, rel=0.5;
+	arg in, out=0, amp=1,atk=0.01, sus=0.3, rel=0.1, pan=0;
 	var sig = In.ar(in,2);
 
 	var gate = In.kr(~gatesRisset, 4);
 	var level = In.kr(~levelsRisset, 4);
 //	var env = EnvGen.kr(Env([0,1,1,0],[atk,sus,rel],[1,0,-1]), gate);
-	var env = EnvGen.ar(Env.perc(atk,rel), Mix(gate));
+	var env = EnvGen.ar(Env.perc(atk,rel), gate);
 
-	Out.ar(out,	sig * 0 );
+	Out.ar(out,
+		Pan2.ar(
+			Mix(sig * env * level), pan));
 }).add;
 )
 
@@ -242,9 +259,12 @@ SynthDef(\rissetFX, {
 ~rissetFX.free;
 ~rissetFX = Synth(\rissetFX, [
 	\in, ~buses[\rissetFX],
-	\out, 3
+	\out, 0
 ], ~fxGrp);
 )
+
+
+
 
 
 
