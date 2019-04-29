@@ -161,7 +161,7 @@ SynthDef(\simpleBufPlayerRiss, {
 	Out.ar(out,
 		Pan2.ar(
 			Mix(sig * env * level),
-			SinOsc.kr(0.5), amp));
+			SinOsc.kr(0.05), amp));
 
 }).add;
 
@@ -204,10 +204,10 @@ l = Synth(\logger);
 SynthDef(\resetExample, {
 	|out=0|
 	var reset = In.kr(~resetBusIx, 1); // all-time 0 except a 1
-	var env = EnvGen.ar(Env.perc(0.05,0.55), reset);
-	var sig = SinOsc.ar(50,0, 0.5);
+	var env = EnvGen.ar(Env.perc(0.01,0.1), reset);
+	var sig = SinOsc.ar(50,0, 0.15);
 
-	sig = CombN.ar(sig * env, 1, 10/12, 60);
+	sig = CombN.ar(sig * env, 1, 10/120, 20);
 
 	Out.ar(out, Pan2.ar(sig));
 }).add;
@@ -226,7 +226,7 @@ k = Synth(\resetExample);
 SynthDef(\toRissetTest, {
 	arg out = 0;
 	//test rissetFx
-	var sig = SinOsc.ar([440,543]/2, 0,0.5);
+	var sig = SinOsc.ar([440,543]/2, 0,0.125);
 	Out.ar(out, sig);
 }).add;
 )
@@ -242,16 +242,21 @@ SynthDef(\toRissetTest, {
 //Takes an audio input and processes it through the risset envelope.
 SynthDef(\rissetFX, {
 	arg in, out=0, amp=1,atk=0.01, sus=0.3, rel=0.1, pan=0;
-	var sig = In.ar(in,2);
+	var sigL = In.ar(in,1); //we need to keep stereo so we treat each channel separately
+	var sigR = In.ar(in+1,1);
 
 	var gate = In.kr(~gatesRisset, 4);
 	var level = In.kr(~levelsRisset, 4);
 //	var env = EnvGen.kr(Env([0,1,1,0],[atk,sus,rel],[1,0,-1]), gate);
 	var env = EnvGen.ar(Env.perc(atk,rel), gate);
 
-	Out.ar(out,
-		Pan2.ar(
-			Mix(sig * env * level), pan));
+	var sig;
+	sigL = Mix(sigL * env * level * amp * 2);
+	sigR = Mix(sigR * env * level * amp * 2);
+	sig = [sigL, sigR];
+
+
+	Out.ar(out, sig);
 }).add;
 )
 
@@ -259,7 +264,9 @@ SynthDef(\rissetFX, {
 ~rissetFX.free;
 ~rissetFX = Synth(\rissetFX, [
 	\in, ~buses[\rissetFX],
-	\out, 0
+	\out, 0,
+	\atk, 0.001,
+	\rel, 0.1
 ], ~fxGrp);
 )
 
