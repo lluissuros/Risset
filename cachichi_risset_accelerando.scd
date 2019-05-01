@@ -10,9 +10,13 @@ s.boot
 //TODO: can make it nicer within a Dictionary
 //buses
 ~resetBusIx = Bus.control(s);
+~resetBusTrigger = Bus.control(s);
 ~posBusIx = Bus.control(s);
 ~levelsRisset = Bus.control(s, 4);
 ~gatesRisset =  Bus.control(s, 4);
+
+// allocate the unique ids for the trigger ids
+~idResetTrig = UniqueID.next;
 )
 (
 //TODO: this could be renamed as a Synth, maybe controlsGenerator
@@ -53,12 +57,17 @@ s.boot
 	+ (lphase * pulses[4]);
 
 
+	var trigger = Trig.kr(phase >= 1, 0.2); //send a reset trigger each time phase hits 1
+
 	// We want to send a reset pulse at the first phrase boundary after the phase hits 1.
 	var tock = Delay2.kr(PulseDivider.kr(i, 16, 1));
 	Out.kr(~resetBusIx, tock * Integrator.kr(
 		phase >= 1,	// When the phase reaches 1, fill up the integrator
 		1-Delay1.kr(tock)	// One control cycle after the reset, empty the integrator
 	));
+
+
+	SendTrig.kr(trigger, ~idResetTrig); //send msg back to client
 
 
 	// The reset position should be such that the frequency is instantaneously halved
@@ -391,46 +400,119 @@ Pbindef(\testMovingQFXs).play;
 
 
 
-Tdef(\movinngQTask1, {
-	|args|
-	var period;
 
-	//defaults
-	args.pulseFreq = Pdefn(\twoIncrementedConsecutives).asStream;
-	args.baseFreq = Scale.minor.degreeToFreq(1, 20.midicps, 1);
-	args.sustain = 10;
-	args.transition = 4;
-	args.overlap = 15;
-	args.maxffreq = 6000;
-	args.ringLength = 3;
-	args.instrument = \dynKlankPulse;
 
-	period = args[\transition] *2 + args[\sustain] / args[\overlap];
 
-    loop {
-		period = args[\transition] *2 + args[\sustain] / args[\overlap];
 
-		Synth(args[\instrument], [
-			\atk, args[\transition],
-			\sus, args[\sustain],
-			\rel, args[\transition],
-			\pan, 1.0.rand2,
-			\freq, args[\baseFreq],
-			\maxffreq, args[\maxffreq],
-			\ringLength, args[\ringLength],
-			\pulseFreq, args[\pulseFreq].next,
-			\amp, 0.3
-        ]);
-        period.wait;
-    }
-});
+
+
+(
+SynthDef(\resetExample, {
+	|out=0|
+	var reset = In.kr(~resetBusIx, 1); // all-time 0 except a 1
+	var env = EnvGen.ar(Env.perc(0.01,0.1), reset);
+	var sig = SinOsc.ar(50,0, 0.15);
+
+	//sig = CombN.ar(sig * env, 1, 10/120, 20);
+	sig = sig * env;
+
+	Out.ar(out, Pan2.ar(sig));
+}).add;
 )
-Tdef(\player1).play;
+
+
+(
+k.free;
+k = Synth(\resetExample);
+)
 
 
 
 
 
+
+
+
+//trigger on Reset
+
+
+/*Simple trigger code...*/
+(
+
+SynthDef(\ampListener, {arg id1, limit = 1, thresh = 0.5;
+	var src, amp, amptrig, timer;
+	src = SoundIn.ar(0);
+	// analyze the amplitude input, cause a trigger if the output is over the thresh
+	amp = Amplitude.kr(src);
+	amptrig = Trig.kr(amp > thresh, limit);
+	// use amptrig to see how long it is between triggers.
+	//timer = Timer.kr(amptrig);
+	// send the values back with two different ids
+	SendTrig.kr(amptrig, id1, amp);
+	//SendTrig.kr(amptrig, id2, timer);
+}).add;
+
+
+// modulated noise to respond to amp spikes
+SynthDef(\makeNoise, {arg freq;
+	Out.ar(1, LFNoise1.ar(200) * SinOsc.ar(freq, 0,
+		XLine.kr(0.1, 0.00001, 0.5, doneAction: 2)));
+}).add;
+
+// allocate the unique ids for the trigger ids
+~id1 = UniqueID.next;
+
+// an envelope to poll for amp values later
+e = Env([440, 880], [1], \exp);
+
+// add the responder:
+o = OSCresponderNode(s.addr, '/tr', {arg time, responder, msg;
+	// the msg is an array with 4 values... post them
+	msg.postln;
+	// the id sent back from the SendTrig is msg[2]... use it to decide what to do
+	case
+		// amp trigger
+		{msg[2] == ~id1}
+	   // play a noise burst, higher the amp value, higher the freq(polls the Env 'e')
+		{Synth(\makeNoise, [\freq, e[msg[3]]]);
+		//change the counter:
+		~counterIter = ~counterIter + 1;
+	   ~mtranspose.wrapAt(~counterIter).postln;
+		~counterPulse = ~counterPulse + 1;
+		~mtranspose.wrapAt(~counterPulse).postln;
+	}
+}).add;
+
+//the listener:
+Synth(\ampListener, [\id1, ~idResetTrig, \limit, 0.2, \thresh, 0.75]);
+
+// add a command period function to stop the synths and remove the responder
+CmdPeriod.doOnce({
+	o.remove; "Removed the responder".postln;
+})
+)
+
+
+// register to receive this message
+(
+~resetTriggerResponder.free;
+~resetTriggerResponder = OSCFunc({ arg msg, time;
+	//[time, msg].postln;
+	case
+	{msg[2] == ~idResetTrig}{
+		//action:
+		Synth(\bufPlayer, [
+			\buf, ~findBufferByName.("entryGosh"),
+			\atk, 0.001,
+			\sus, 2,
+			\rel, 4,
+			\amp, 0.5,
+			\out, ~buses[\infiniteReverbPA]
+		])
+	}
+},'/tr');
+
+)
 
 
 
