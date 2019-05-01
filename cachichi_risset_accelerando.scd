@@ -90,7 +90,7 @@ s.boot
 
 
 (
-SynthDef(\snareTest, { |out=0|
+SynthDef(\snareRissetTest, { |out=0|
 	//uses all risset lines
 	var gate = In.kr(~gatesRisset, 4);
 	var level = In.kr(~levelsRisset, 4);
@@ -114,7 +114,7 @@ SynthDef(\snareTest, { |out=0|
 
 (
 a.free;
-a = Synth(\snareTest);
+a = Synth(\snareRissetTest);
 a.set(\out, ~buses[\movingQFX]);
 )
 
@@ -146,53 +146,84 @@ s = Synth(\sineTest);
 
 
 (
+//interesting sounds
+~beats_esc50 = [1084, 2, 630, 411, 611, 1050, 34, 1492];
+
 SynthDef(\simpleBufPlayerRiss, {
-	arg buf=0, rate=1, sPos=0, amp=0.1, out=0, loop=1,
-	atk=1.1, sus=0.3, rel=1.1, pan=0;
+	// it loops over and has a long envelope. If sPos changes sounds lees repetittive.
+	arg buf=0, out=0, rate=1, sPos=0, amp=0.5, loop=1, pan=0, panWidth=2,
+	gated = 0, // 0 means no gate, 1 means gate by risset
+	atk=3, sus=8, rel=8;
 
-	var gate = In.kr(~gatesRisset, 4);
-	var level = In.kr(~levelsRisset, 4);
+	var gate = Mix(In.kr(~gatesRisset, 4)).dup * gated;
 
-//	var env = EnvGen.kr(Env([0,1,1,0],[atk,sus,rel],[1,0,-1]), gate);
-	var env = EnvGen.ar(Env.perc(0.05,0.55), gate);
-	var sig = PlayBuf.ar(1, buf, rate*BufRateScale.ir(buf), trigger: gate, startPos:sPos, loop:loop);
+	var posMover = Line.ar(0, 0.8, atk+sus+rel);
+	var framePos = (sPos * BufFrames.kr(buf) + posMover); //adapted to sample
 
-	Out.ar(out,
-		Pan2.ar(
-			Mix(sig * env * level),
-			pan, amp));
+	var sig = PlayBuf.ar(1, buf, rate*BufRateScale.ir(buf), trigger: gate, startPos:framePos, loop:loop);
 
+
+	//var sig = PlayBuf.ar(1, buf, rate*BufRateScale.ir(buf), startPos:sPos, loop:loop).dup;
+
+	var env = EnvGen.kr(Env.linen(atk, sus, rel, 1, \sin), doneAction:2);
+
+	sig = sig * env * amp;
+
+	//-1 tp +1 to mudlate along the circle
+	Out.ar(out, PanAz.ar(2, sig, pan, width: panWidth));
 }).add;
 
 )
 
 
 
-
-
 (
-b.free;
-b = Synth(\simpleBufPlayerRiss, [\buf, ~getRandBuf.(\birds)])
+Pbindef(\bufPlayer,
+	\instrument, \simpleBufPlayerRiss,
+	\buf, Pfunc({~getBufAt.({~beats_esc50.choose}.(),\esc50, true)}).stutter(4),
+	\out, ~buses[\rissetFX],
+	\dur, Pseq([5,10,15]/8 ,inf),
+	\amp, Pseq([0.5, 0.2, 0.8]/8, inf),
+	\attack, 1,
+	\sustain,1,
+	\release, 1,
+	\gated, Pwrand([0,1], [4, 1].normalizeSum, inf),
+);
+Pbindef(\bufPlayer).play;
 )
-b.set(\buf, ~getRandBuf.(\birds));
-b.set(\buf, ~getRandBuf.());
-b.set(\buf, ~getBufAt.(~niceSoundsESC.choose,\esc50, true));
-b.set(\buf, ~getBufAt.(630)); //630
-b.set(\buf, ~getBufAt.(~beats_esc50.choose)); //630
-b.set(\amp, 0.125);
-b.set(\rate, 4/4);
-b.set(\out, ~buses[\infiniteReverbPA]);
-b.set(\out, ~buses[\reverb1PA]);
-b.set(\out, 0);
+
+Pbindef(\bufPlayer).play;
+Pbindef(\bufPlayer).stop;
 
 
-(
-//interesting sounds
-~beats_esc50 = [1084, 2, 630, 411, 611, 1050, 34, 1492]
-)
+Pbindef(\bufPlayer, \out, ~buses[\movingQFX]);
+Pbindef(\bufPlayer, \out, ~buses[\infiniteReverbPA]);
+Pbindef(\bufPlayer, \out, ~buses[\reverb1PA]);
+Pbindef(\bufPlayer, \out, ~buses[\rissetFX]);
+
+
+
+Pbindef(\bufPlayer, \buf, ~getBufAt.(630));
+Pbindef(\bufPlayer, \buf, ~getRandBuf.(\birds));
+Pbindef(\bufPlayer, \buf, Pfunc({~getBufAt.({~beats_esc50.choose}.(),\esc50, true)}).stutter(1));
+Pbindef(\bufPlayer, \pan, Pseq(Array.series(21, -1, 0.1) ,inf));
+Pbindef(\bufPlayer, \pan, Pseq([1] ,inf));
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ~buses.keys
-
 
 (
 SynthDef(\logger, {
@@ -269,7 +300,6 @@ SynthDef(\rissetFX, {
 	sigR = Mix(sigR * env * level * amp * gainCompensation);
 	sig = [sigL, sigR];
 
-
 	Out.ar(out, sig);
 }).add;
 )
@@ -281,13 +311,13 @@ SynthDef(\rissetFX, {
 	\out, 0,
 	\atk, 0.001,
 	\rel, 0.3
-], ~fxGrp);
+], ~fxGrp, \addToHead);
 )
 
 ~rissetFX.set(\out, ~buses[\reverb1PA])
 ~rissetFX.set(\out, ~buses[\infiniteReverbPA])
+~rissetFX.set(\out, ~buses[\movingQFX])
 ~rissetFX.set(\rel, 0.4)
-
 
 
 
@@ -305,7 +335,7 @@ SynthDef(\movingQFX, {
 	//TODO: Check XFade2 for equal power cross fade between two inputs
 	//TODO better: this is what I'm doing: { Resonz.ar(WhiteNoise.ar(0.5), 2000, XLine.kr(1, 0.001, 8)) }.play
 
-	var env = EnvGen.kr(Env.linen(atk, sus, rel),doneAction:2);
+	var env = EnvGen.kr(Env.linen(atk, sus, rel, 1, \welch), doneAction:2);
 	var rq = factor * XLine.kr(100,1,rel)+ LFNoise1.kr(0.1,factor,factor);
 	var sig = BPF.ar(In.ar(in,2), freq, rq);
 	var compSig =  Compander.ar(sig, sig, thresh: 0.1,slopeBelow: 1, slopeAbove: 0.15, clampTime: 0.01, relaxTime: 0.01,mul:1.5);
@@ -336,10 +366,12 @@ SynthDef(\movingQFX, {
 Pbindef(\testMovingQFXs,
 	\instrument, \movingQFX,
 	\group, ~fxGrp,
+	\addAction, \addToTail,
 	\in, ~buses[\movingQFX],
-	\dur, Pseq([0.1,0.5,1],inf),
+	\dur, Pseq([1, 4],inf),
+	\atk,  Pseq([9], inf),
 	\sus, Pseq([0.1, 1, 9,14], inf),
-	\rel, Pseq([9], inf),
+	\rel, Pseq([9, 1], inf),
 	\amp, Prand([0.1,0.2,0.3],inf),
 	\revMix, Prand([1,0.8,0.5,0.3,0.1],inf),
 	\out, 0, //start for panning
@@ -416,29 +448,6 @@ Tdef(\player1).play;
 
 
 
-//TODO delete: for inspiration now
-(
-Pbindef(\movingQESC50,
-	\instrument, \substractionMovingQBuf,
-//	\buf, Pfunc({~getBufAt.([1050].choose, \esc50)}).stutter(10),
-//	\buf, Pfunc({~getRandBuf.(\esc50)}).stutter(10),
-	\buf, Pfunc({~getRandBuf.(\birds)}).stutter(1),
-	\buf, Pfunc({~getBufAt.(~niceSoundESCLong.choose,\esc50)}).stutter(10),
-	\dur, Pseq([3,5,7]/15,inf),
-	\loop, 1,
-	\release, 1,
-	\attack, 3,
-	\sustain,5,
-	\amp, Pxrand([0.3,0.5,0.7]* 0.25,inf),
-	\revMix, Prand([1,0.8,0.5,0.3,0.1],inf),
-	\out, Pxrand([2,3,4,5,6,7], inf), //everywhere,
-	\pan, Pseq(Array.series(21, -1, 0.1) ,inf),
-	\panwidth, 1,
-	\rate, Pseq([0].midiratio, inf),
-//	\rate, Pseq([2,1,0.5].stutter(4), inf),
-	\degree, Pseq([0 ,3, 5, 6, 7]-2,inf),
-	\octave, Pseq([2,3,4,5],inf)
-);
-)
+
 
 
