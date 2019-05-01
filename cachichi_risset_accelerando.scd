@@ -14,8 +14,6 @@ s.boot
 ~levelsRisset = Bus.control(s, 4);
 ~gatesRisset =  Bus.control(s, 4);
 )
-
-
 (
 //TODO: this could be renamed as a Synth, maybe controlsGenerator
 
@@ -92,7 +90,7 @@ s.boot
 
 
 (
-SynthDef(\snareTest, {
+SynthDef(\snareTest, { |out=0|
 	//uses all risset lines
 	var gate = In.kr(~gatesRisset, 4);
 	var level = In.kr(~levelsRisset, 4);
@@ -101,7 +99,7 @@ SynthDef(\snareTest, {
 	var ampOsc = SinOsc.ar(1/100, pi/2, 0.25, 0.5);
 
 
-	Out.ar(0, Pan2.ar(
+	Out.ar(out, Pan2.ar(
 		Mix(
 		// This snare synth is by Esben Stien
 			((SinOsc.ar(330,0,0.25) * EnvGen.ar(Env.perc(0.0005,0.055), gate))
@@ -117,6 +115,7 @@ SynthDef(\snareTest, {
 (
 a.free;
 a = Synth(\snareTest);
+a.set(\out, ~buses[\movingQFX]);
 )
 
 
@@ -149,7 +148,7 @@ s = Synth(\sineTest);
 (
 SynthDef(\simpleBufPlayerRiss, {
 	arg buf=0, rate=1, sPos=0, amp=0.1, out=0, loop=1,
-	atk=1.1, sus=0.3, rel=1.1;
+	atk=1.1, sus=0.3, rel=1.1, pan=0;
 
 	var gate = In.kr(~gatesRisset, 4);
 	var level = In.kr(~levelsRisset, 4);
@@ -161,7 +160,7 @@ SynthDef(\simpleBufPlayerRiss, {
 	Out.ar(out,
 		Pan2.ar(
 			Mix(sig * env * level),
-			SinOsc.kr(0.05), amp));
+			pan, amp));
 
 }).add;
 
@@ -177,8 +176,22 @@ b = Synth(\simpleBufPlayerRiss, [\buf, ~getRandBuf.(\birds)])
 )
 b.set(\buf, ~getRandBuf.(\birds));
 b.set(\buf, ~getRandBuf.());
-b.set(\buf, ~getBufAt.(~niceSoundsESC.choose,\esc50));
-b.set(\amp, 0.25);
+b.set(\buf, ~getBufAt.(~niceSoundsESC.choose,\esc50, true));
+b.set(\buf, ~getBufAt.(630)); //630
+b.set(\buf, ~getBufAt.(~beats_esc50.choose)); //630
+b.set(\amp, 0.125);
+b.set(\rate, 4/4);
+b.set(\out, ~buses[\infiniteReverbPA]);
+b.set(\out, ~buses[\reverb1PA]);
+b.set(\out, 0);
+
+
+(
+//interesting sounds
+~beats_esc50 = [1084, 2, 630, 411, 611, 1050, 34, 1492]
+)
+
+~buses.keys
 
 
 (
@@ -207,7 +220,8 @@ SynthDef(\resetExample, {
 	var env = EnvGen.ar(Env.perc(0.01,0.1), reset);
 	var sig = SinOsc.ar(50,0, 0.15);
 
-	sig = CombN.ar(sig * env, 1, 10/120, 20);
+	//sig = CombN.ar(sig * env, 1, 10/120, 20);
+	sig = sig * env;
 
 	Out.ar(out, Pan2.ar(sig));
 }).add;
@@ -241,18 +255,18 @@ SynthDef(\toRissetTest, {
 (
 //Takes an audio input and processes it through the risset envelope.
 SynthDef(\rissetFX, {
-	arg in, out=0, amp=1,atk=0.01, sus=0.3, rel=0.1, pan=0;
+	arg in, out=0, amp=1,atk=0.01, rel=0.1, pan=0;
 	var sigL = In.ar(in,1); //we need to keep stereo so we treat each channel separately
 	var sigR = In.ar(in+1,1);
 
 	var gate = In.kr(~gatesRisset, 4);
 	var level = In.kr(~levelsRisset, 4);
-//	var env = EnvGen.kr(Env([0,1,1,0],[atk,sus,rel],[1,0,-1]), gate);
 	var env = EnvGen.ar(Env.perc(atk,rel), gate);
+	var gainCompensation = 2.5;
 
 	var sig;
-	sigL = Mix(sigL * env * level * amp * 2);
-	sigR = Mix(sigR * env * level * amp * 2);
+	sigL = Mix(sigL * env * level * amp * gainCompensation);
+	sigR = Mix(sigR * env * level * amp * gainCompensation);
 	sig = [sigL, sigR];
 
 
@@ -266,9 +280,133 @@ SynthDef(\rissetFX, {
 	\in, ~buses[\rissetFX],
 	\out, 0,
 	\atk, 0.001,
-	\rel, 0.1
+	\rel, 0.3
 ], ~fxGrp);
 )
+
+~rissetFX.set(\out, ~buses[\reverb1PA])
+~rissetFX.set(\out, ~buses[\infiniteReverbPA])
+~rissetFX.set(\rel, 0.4)
+
+
+
+
+
+(
+//substractionMovinqQFx
+
+SynthDef(\movingQFX, {
+	|in, out=0, freq=1100, amp=0.5, pan=0, revMix=0.2,
+	atk=1, sus=3, rel=9|
+
+	var factor =  (10/freq); //keep total rq above zero!
+	//freq.poll(Impulse.kr(5));
+
+	//TODO: Check XFade2 for equal power cross fade between two inputs
+	//TODO better: this is what I'm doing: { Resonz.ar(WhiteNoise.ar(0.5), 2000, XLine.kr(1, 0.001, 8)) }.play
+
+	var env = EnvGen.kr(Env.linen(atk, sus, rel),doneAction:2);
+	var rq = factor * XLine.kr(100,1,rel)+ LFNoise1.kr(0.1,factor,factor);
+	var sig = BPF.ar(In.ar(in,2), freq, rq);
+	var compSig =  Compander.ar(sig, sig, thresh: 0.1,slopeBelow: 1, slopeAbove: 0.15, clampTime: 0.01, relaxTime: 0.01,mul:1.5);
+	var drySig = compSig * (1-revMix);
+	var	wetSig = GVerb.ar(compSig*revMix);
+
+	//TODO SUPEREXPENSIVE: use cheaper reverb, or BETTER route to external reverb
+	sig = (drySig + wetSig) * amp * env;
+
+	// -1 to +1 is used to modulate the pan along circle.
+	Out.ar(out, PanAz.ar(2, sig, pan) ); //use Mix?
+}).add;
+
+)
+
+/*(
+~movingQFX.free;
+~movingQFX = Synth(\movingQFX, [
+	\in, ~buses[\movingQFX],
+	\out, 0,
+	//\atk, 0.001,
+	//\rel, 0.3
+], ~fxGrp);
+)*/
+
+
+(
+Pbindef(\testMovingQFXs,
+	\instrument, \movingQFX,
+	\group, ~fxGrp,
+	\in, ~buses[\movingQFX],
+	\dur, Pseq([0.1,0.5,1],inf),
+	\sus, Pseq([0.1, 1, 9,14], inf),
+	\rel, Pseq([9], inf),
+	\amp, Prand([0.1,0.2,0.3],inf),
+	\revMix, Prand([1,0.8,0.5,0.3,0.1],inf),
+	\out, 0, //start for panning
+	\pan, Pseq(Array.series(21, -1, 0.1) ,inf),
+	\panwidth, 1,
+	\degree, Pseq([0 ,3, 5, 6, 7]-2,inf),
+	\octave, Pseq([2,4,5,6,7,8,9,10,11],inf)
+);
+Pbindef(\testMovingQFXs).play;
+)
+
+
+
+
+
+
+
+
+
+Tdef(\movinngQTask1, {
+	|args|
+	var period;
+
+	//defaults
+	args.pulseFreq = Pdefn(\twoIncrementedConsecutives).asStream;
+	args.baseFreq = Scale.minor.degreeToFreq(1, 20.midicps, 1);
+	args.sustain = 10;
+	args.transition = 4;
+	args.overlap = 15;
+	args.maxffreq = 6000;
+	args.ringLength = 3;
+	args.instrument = \dynKlankPulse;
+
+	period = args[\transition] *2 + args[\sustain] / args[\overlap];
+
+    loop {
+		period = args[\transition] *2 + args[\sustain] / args[\overlap];
+
+		Synth(args[\instrument], [
+			\atk, args[\transition],
+			\sus, args[\sustain],
+			\rel, args[\transition],
+			\pan, 1.0.rand2,
+			\freq, args[\baseFreq],
+			\maxffreq, args[\maxffreq],
+			\ringLength, args[\ringLength],
+			\pulseFreq, args[\pulseFreq].next,
+			\amp, 0.3
+        ]);
+        period.wait;
+    }
+});
+)
+Tdef(\player1).play;
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
