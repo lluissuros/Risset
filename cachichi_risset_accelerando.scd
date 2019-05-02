@@ -107,7 +107,6 @@ SynthDef(\snareRissetTest, { |out=0|
 
 	var ampOsc = SinOsc.ar(1/100, pi/2, 0.25, 0.5);
 
-
 	Out.ar(out, Pan2.ar(
 		Mix(
 		// This snare synth is by Esben Stien
@@ -125,30 +124,10 @@ SynthDef(\snareRissetTest, { |out=0|
 //TODO: as Pbind better! And snare enveloped
 a.free;
 a = Synth(\snareRissetTest);
-a.set(\out, ~buses[\movingQFX]);
-)
-
-
-(
-SynthDef(\sineTest, {
-	//uses less risset line
-	var gate = In.kr(~gatesRisset, 1);
-	var level = In.kr(~levelsRisset, 1);
-	var ampOsc = SinOsc.ar(1/100, 0, 0.25, 0.5);
-
-	Out.ar(0, Pan2.ar(
-		Mix(
-			SinOsc.ar(5000, 0, 0.05)
-			* EnvGen.ar(Env.perc(0.05,0.25), gate)
-			* level
-
-	),0,ampOsc));
-}).add;
-)
-
-(
-s.free;
-s = Synth(\sineTest);
+//a.set(\out, ~buses[\movingQFX]);
+a.set(\out, ~buses[\externalSend1]);
+a.set(\out, ~buses[\grainPan]);
+a.set(\out, ~buses[\panAzCircle]);
 )
 
 
@@ -237,7 +216,6 @@ Pbindef(\bufPlayer, \amp, Pseq([0.5] ,inf));
 
 
 
-~buses.keys
 
 (
 SynthDef(\logger, {
@@ -248,35 +226,14 @@ SynthDef(\logger, {
 
 	level.poll;
 }).add;
-)
 
-
-(
 l.free;
 l = Synth(\logger);
 )
 
 
 
-(
-SynthDef(\resetExample, {
-	|out=0|
-	var reset = In.kr(~resetBusIx, 1); // all-time 0 except a 1
-	var env = EnvGen.ar(Env.perc(0.01,0.1), reset);
-	var sig = SinOsc.ar(50,0, 0.15);
 
-	//sig = CombN.ar(sig * env, 1, 10/120, 20);
-	sig = sig * env;
-
-	Out.ar(out, Pan2.ar(sig));
-}).add;
-)
-
-
-(
-k.free;
-k = Synth(\resetExample);
-)
 
 
 
@@ -298,7 +255,9 @@ SynthDef(\toRissetTest, {
 ~testFx.set(\out, ~buses[\reverb1PA])
 
 
-~buses.keys
+
+
+
 (
 //Takes an audio input and processes it through the risset envelope.
 SynthDef(\rissetFX, {
@@ -368,15 +327,6 @@ SynthDef(\movingQFX, {
 
 )
 
-/*(
-~movingQFX.free;
-~movingQFX = Synth(\movingQFX, [
-	\in, ~buses[\movingQFX],
-	\out, 0,
-	//\atk, 0.001,
-	//\rel, 0.3
-], ~fxGrp);
-)*/
 
 
 (
@@ -427,14 +377,11 @@ SynthDef(\resetExample, {
 
 	Out.ar(out, Pan2.ar(sig));
 }).add;
-)
 
 
-(
 k.free;
 k = Synth(\resetExample);
 )
-
 
 
 
@@ -469,7 +416,7 @@ k = Synth(\resetExample);
 
 
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-//test postion follower FX
+// postion follower FX
 (
 SynthDef(\positionRissetFollowerFX, {
 	|in, out=0, ampCorrection=1|
@@ -490,15 +437,117 @@ Pbindef(\morphFront, \amp, 0.1);
 ~test.free;
 ~test = Synth(\positionRissetFollowerFX, [
 	\in, ~buses[\positionRissetFollowerFX],
-	\out, ~buses[\rissetFX]
+	\out, ~buses[\reverb1PA]
 ], ~fxGrp)
 )
+
 \movingQFX
 \rissetFX
 
+
+
+//+++++++++++++++++++++++++++++++
+//send to pedals and return
+(
+SynthDef(\extSend1, {
+	|in, out|
+	var sig = In.ar(in,2);
+	Out.ar(out, sig);
+}).add;
+
+SynthDef(\extReturn1,{
+	|in, out|
+	var sig = SoundIn.ar([in, in+1]);
+	Out.ar(out, sig);
+}).add;
+
+
+~send1ToPedals.free;
+~send1ToPedals = Synth(\extSend1, [
+	\in, ~buses[\externalSend1],
+	\out, 4,
+], ~externalGrp);
+
+~return1.free;
+~return1 = Synth(\extReturn1, [
+	\in, 2,
+	\out, 6, //phones
+], ~externalGrp, \addToTail);
+
+)
+
+
+
+
+(
+//SPATIALIZING
+
+
+// TODO: PanAZFx: takes an input and spreads it around
+SynthDef(\surroundCircle4,{
+	|in, out=0, circleFreq=1, amp=0,
+	atk=8, sus=8, rel=8|
+	var inL = In.ar(in, 1) * amp;
+	var inR = In.ar(in+1, 1) * amp;
+	var env = EnvGen.kr(Env.linen(atk, sus, rel, 1, \sin), doneAction:2);
+
+	Out.ar(out, PanAz.ar(4, inL*env, LFSaw.ar(circleFreq)));
+	Out.ar(out, PanAz.ar(4, inR*env, LFSaw.ar(circleFreq)));
+}).add;
+
+
+//Takes input and Grains it like panAz
+SynthDef(\grainPanAzFX, {
+	|in, out=0, grainFreq=250, grainDur=0.1, pan=0,
+	atk=8, sus=8, rel=8, amp=0.5|
+	var inL = In.ar(in, 1);
+	var inR = In.ar(in+1, 1);
+	var grainedL = GrainIn.ar(4, Dust.kr(grainFreq), grainDur, inL, pan);
+	var grainedR = GrainIn.ar(4, Dust.kr(grainFreq), grainDur, inR, pan);
+	var env = EnvGen.kr(Env.linen(atk, sus, rel, 1, \sin), doneAction:2);
+	Out.ar(out, grainedL * env * amp);
+	Out.ar(out, grainedR * env * amp);
+}).add;
+
+//Do it as pbind!!!
+Pbindef(\grainPanFxs,
+	\instrument, \grainPanAzFX,
+	\group, ~spatializersGrp,
+	\addAction, \addToTail,
+	\in, ~buses[\grainPan],
+	\out, 0,
+	\atk, 0.1,
+	\sus, 0.1,
+	\rel, 0.1,
+	\dur, Pseq([0.1], inf),
+	\pan, Pbrown(-1.0,1.0, 0.05, inf),
+);
+Pbindef(\grainPanFxs).play;
+
+Pbindef(\surroundCircle4,
+	\instrument, \surroundCircle4,
+	\group, ~spatializersGrp,
+	\addAction, \addToTail,
+	\in, ~buses[\panAzCircle],
+	\out, 0,
+	\dur, Pseq([2], inf),
+	\atk, 1.5,
+	\sus, 1.5,
+	\rel, 1.5,
+	\circleFreq, Pbrown(1,3,0.05, inf),
+);
+
+Pbindef(\grainPanFxs).play;
+Pbindef(\surroundCircle4).play;
+)
+
+
+Pbindef(\grainPanFxs).stop;
+
+
 ~buses.keys
 
--> Set[ reverb1Surr, positionRissetFollowerFX, stresonSurr, rissetFX, stresonVib, stresonPA, reverb0Surr, reverb1PA, reverb0PA, reverb0Vib, infiniteReverbSurr, reverb1Vib, movingQFX, infiniteReverbVib, infiniteReverbPA ]
+-> Set[ reverb1Surr, positionRissetFollowerFX, stresonSurr, rissetFX, stresonVib, stresonPA, reverb0Surr, reverb1PA, reverb0PA, reverb0Vib, infiniteReverbSurr, reverb1Vib, movingQFX, infiniteReverbVib, infiniteReverbPA, externalSend1, externalReturn1]
 
 
 //nice!! postcards(sPos=0.1) + follower + bufPlayer on risset
@@ -508,8 +557,12 @@ s.record
 s.stopRecording
 
 
+(
+x.free;
+x = {PanAz.ar(4,SinOsc.ar(400), LFSaw.ar(0.5))}.play
+)
 
-
+x.dump
 
 
 
