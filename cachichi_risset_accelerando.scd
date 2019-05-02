@@ -122,6 +122,7 @@ SynthDef(\snareRissetTest, { |out=0|
 )
 
 (
+//TODO: as Pbind better! And snare enveloped
 a.free;
 a = Synth(\snareRissetTest);
 a.set(\out, ~buses[\movingQFX]);
@@ -166,7 +167,7 @@ SynthDef(\simpleBufPlayerRiss, {
 
 	var gate = Mix(In.kr(~gatesRisset, 4)).dup * gated;
 
-	var posMover = Line.ar(0, 0.8, atk+sus+rel);
+	var posMover = Line.ar(0, 0.6, (atk+sus+rel)/2);
 	var framePos = (sPos * BufFrames.kr(buf) + posMover); //adapted to sample
 
 	var sig = PlayBuf.ar(1, buf, rate*BufRateScale.ir(buf), trigger: gate, startPos:framePos, loop:loop);
@@ -191,12 +192,13 @@ Pbindef(\bufPlayer,
 	\instrument, \simpleBufPlayerRiss,
 	\buf, Pfunc({~getBufAt.({~beats_esc50.choose}.(),\esc50, true)}).stutter(4),
 	\out, ~buses[\rissetFX],
-	\dur, Pseq([5,10,15]/8 ,inf),
+	\dur, Pseq([5,10,15] ,inf),
 	\amp, Pseq([0.5, 0.2, 0.8]/8, inf),
-	\attack, 1,
-	\sustain,1,
-	\release, 1,
-	\gated, Pwrand([0,1], [4, 1].normalizeSum, inf),
+	\atk, 1,
+	\sus,8,
+	\rel, 8,
+	//\gated, Pwrand([0,1], [4, 1].normalizeSum, inf),
+	\gated, 1,
 );
 Pbindef(\bufPlayer).play;
 )
@@ -209,6 +211,7 @@ Pbindef(\bufPlayer, \out, ~buses[\movingQFX]);
 Pbindef(\bufPlayer, \out, ~buses[\infiniteReverbPA]);
 Pbindef(\bufPlayer, \out, ~buses[\reverb1PA]);
 Pbindef(\bufPlayer, \out, ~buses[\rissetFX]);
+Pbindef(\bufPlayer, \out, ~buses[\positionRissetFollowerFX]);
 
 
 
@@ -217,6 +220,8 @@ Pbindef(\bufPlayer, \buf, ~getRandBuf.(\birds));
 Pbindef(\bufPlayer, \buf, Pfunc({~getBufAt.({~beats_esc50.choose}.(),\esc50, true)}).stutter(1));
 Pbindef(\bufPlayer, \pan, Pseq(Array.series(21, -1, 0.1) ,inf));
 Pbindef(\bufPlayer, \pan, Pseq([1] ,inf));
+
+Pbindef(\bufPlayer, \amp, Pseq([0.5] ,inf));
 
 
 
@@ -287,11 +292,13 @@ SynthDef(\toRissetTest, {
 
 (
 ~testFx.free;
-~testFx = Synth(\toRissetTest, [\out, ~buses[\rissetFX]]);
+~testFx = Synth(\toRissetTest, [
+	\out, ~buses[\positionRissetFollowerFX]]);
 )
+~testFx.set(\out, ~buses[\reverb1PA])
 
 
-
+~buses.keys
 (
 //Takes an audio input and processes it through the risset envelope.
 SynthDef(\rissetFX, {
@@ -326,6 +333,7 @@ SynthDef(\rissetFX, {
 ~rissetFX.set(\out, ~buses[\reverb1PA])
 ~rissetFX.set(\out, ~buses[\infiniteReverbPA])
 ~rissetFX.set(\out, ~buses[\movingQFX])
+
 ~rissetFX.set(\rel, 0.4)
 
 
@@ -393,6 +401,7 @@ Pbindef(\testMovingQFXs).play;
 )
 
 
+Pbindef(\testMovingQFXs, \out, ~buses[\reverb1PA]);
 
 
 
@@ -405,7 +414,7 @@ Pbindef(\testMovingQFXs).play;
 
 
 
-
+//TODO DELETE: maybe not needed now with the trigger
 (
 SynthDef(\resetExample, {
 	|out=0|
@@ -430,84 +439,25 @@ k = Synth(\resetExample);
 
 
 
-
-
-
 //trigger on Reset
-
-
 /*Simple trigger code...*/
-(
-
-SynthDef(\ampListener, {arg id1, limit = 1, thresh = 0.5;
-	var src, amp, amptrig, timer;
-	src = SoundIn.ar(0);
-	// analyze the amplitude input, cause a trigger if the output is over the thresh
-	amp = Amplitude.kr(src);
-	amptrig = Trig.kr(amp > thresh, limit);
-	// use amptrig to see how long it is between triggers.
-	//timer = Timer.kr(amptrig);
-	// send the values back with two different ids
-	SendTrig.kr(amptrig, id1, amp);
-	//SendTrig.kr(amptrig, id2, timer);
-}).add;
-
-
-// modulated noise to respond to amp spikes
-SynthDef(\makeNoise, {arg freq;
-	Out.ar(1, LFNoise1.ar(200) * SinOsc.ar(freq, 0,
-		XLine.kr(0.1, 0.00001, 0.5, doneAction: 2)));
-}).add;
-
-// allocate the unique ids for the trigger ids
-~id1 = UniqueID.next;
-
-// an envelope to poll for amp values later
-e = Env([440, 880], [1], \exp);
-
-// add the responder:
-o = OSCresponderNode(s.addr, '/tr', {arg time, responder, msg;
-	// the msg is an array with 4 values... post them
-	msg.postln;
-	// the id sent back from the SendTrig is msg[2]... use it to decide what to do
-	case
-		// amp trigger
-		{msg[2] == ~id1}
-	   // play a noise burst, higher the amp value, higher the freq(polls the Env 'e')
-		{Synth(\makeNoise, [\freq, e[msg[3]]]);
-		//change the counter:
-		~counterIter = ~counterIter + 1;
-	   ~mtranspose.wrapAt(~counterIter).postln;
-		~counterPulse = ~counterPulse + 1;
-		~mtranspose.wrapAt(~counterPulse).postln;
-	}
-}).add;
-
-//the listener:
-Synth(\ampListener, [\id1, ~idResetTrig, \limit, 0.2, \thresh, 0.75]);
-
-// add a command period function to stop the synths and remove the responder
-CmdPeriod.doOnce({
-	o.remove; "Removed the responder".postln;
-})
-)
-
-
-// register to receive this message
 (
 ~resetTriggerResponder.free;
 ~resetTriggerResponder = OSCFunc({ arg msg, time;
 	//[time, msg].postln;
 	case
 	{msg[2] == ~idResetTrig}{
-		//action:
+		//action: trigger sound
+		//
 		Synth(\bufPlayer, [
+			//\buf, ~findBufferByName.("feedbackchords"),
 			\buf, ~findBufferByName.("entryGosh"),
 			\atk, 0.001,
 			\sus, 2,
 			\rel, 4,
-			\amp, 0.5,
-			\out, ~buses[\infiniteReverbPA]
+			\amp, 0.8,
+			\out, ~buses[\infiniteReverbPA],
+			\out, ~buses[\movingQFX]
 		])
 	}
 },'/tr');
@@ -518,13 +468,44 @@ CmdPeriod.doOnce({
 
 
 
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//test postion follower FX
+(
+SynthDef(\positionRissetFollowerFX, {
+	|in, out=0, ampCorrection=1|
+	var sig = In.ar(in, 2);
+	var normPosition = (In.kr(~posBusIx, 1) + 0.5) * 2; //between 0 and 1
+	var ampEnv = LinExp.kr(normPosition, 0, 1, 0.0001, 1); //better exp for amplitudes
+	ampEnv = Lag.kr(ampEnv);
+
+	Out.ar(out, sig * ampEnv *  ampCorrection);
+
+	//ampEnv.poll;
+}).add
+)
+
+(
+Pbindef(\morphFront, \amp, 0.1);
+
+~test.free;
+~test = Synth(\positionRissetFollowerFX, [
+	\in, ~buses[\positionRissetFollowerFX],
+	\out, ~buses[\rissetFX]
+], ~fxGrp)
+)
+\movingQFX
+\rissetFX
+
+~buses.keys
+
+-> Set[ reverb1Surr, positionRissetFollowerFX, stresonSurr, rissetFX, stresonVib, stresonPA, reverb0Surr, reverb1PA, reverb0PA, reverb0Vib, infiniteReverbSurr, reverb1Vib, movingQFX, infiniteReverbVib, infiniteReverbPA ]
 
 
+//nice!! postcards(sPos=0.1) + follower + bufPlayer on risset
 
 
-
-
-
+s.record
+s.stopRecording
 
 
 
