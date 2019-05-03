@@ -326,11 +326,13 @@ Pbindef(\movingQFXs,
 
 
 Pbindef(\oneShotBuf,
-	\instrument, \bufplayer,
+	\instrument, \simpleBufPlayerRiss,
 	\buf, ~findBufferByName.("entryGosh"),
 	\atk, 1,
 	\sus, 2,
 	\rel, 2,
+	\gated, 0,
+	\loop, 0,
 	\amp, Prand([0, 0.01, 0.05, 0.1], 1),
 	\out, Prand([~buses[\infiniteReverbPA], ~buses[\movingQFX]]),
 );
@@ -367,6 +369,7 @@ Pbindef(\surroundCircle4,
 "All Pbindefs created".postln;
 
 
+//TODO: sometime gives error!!
 //send to pedals and return
 if(~send1ToPedals.isNil){}{~send1ToPedals.free};
 ~send1ToPedals = Synth(\extSend1, [
@@ -378,8 +381,7 @@ if(~send1ToPedals.isNil){}{~send1ToPedals.free};
 if(~return1.isNil){}{~return1.free};
 ~return1 = Synth(\extReturn1, [
 	\in, 2,
-	//\out, ~buses[\grainPan],
-	\out, 6, //phones
+	\out, ~buses[\reverb1PA],
 ], ~externalGrp, \addToTail);
 
 
@@ -460,7 +462,8 @@ Pbindef(\movingQFXs).play;
 
 Pbindef(\movingQFXs,\out, Pwrand([~buses[\reverb1PA], ~buses[\infiniteReverbPA], ~buses[\externalSend1]], [2,1,1].normalizeSum, inf));
 
-
+Pbindef(\movingQFXs, \pan, 1)
+Pbindef(\movingQFXs, \out, 0)
 
 //trigger on Reset
 (
@@ -472,15 +475,40 @@ if(~resetTriggerResponder.isNil){}{~resetTriggerResponder.free};
 		Pbindef(\oneShotBuf).play;
 	}
 },'/tr');
-
 )
+(
+Pbindef(\oneShotBuf,
+	\instrument, \simpleBufPlayer,
+	\buf, ~findBufferByName.("entryGosh"),
+	\atk, 1,
+	\sus, 2,
+	\rel, 2,
+	\amp, Prand([0, 0.01, 0.05, 0.1], 1),
+	\out, Prand([~buses[\infiniteReverbPA], ~buses[\movingQFX]]),
+));
+//only one shot so Pseq will always give the first!
+Pbindef(\oneShotBuf, \out, Prand([~buses[\infiniteReverbPA]]));
+Pbindef(\oneShotBuf, \out, Prand([~buses[\movingQFX]]));
+Pbindef(\oneShotBuf, \out, Prand([~buses[\infiniteReverbPA], ~buses[\movingQFX]]));
+Pbindef(\oneShotBuf, \amp, Prand([0.1], 1));
+Pbindef(\oneShotBuf, \buf, Prand([ ~findBufferByName.("entryGosh"), ~findBufferByName.("shakerSustain")]));
+
+
+
 
 
 //position follower
 ~positionFollower.set(\out, ~buses[\movingQFX]);
 ~positionFollower.set(\out, ~buses[\rissetFX]);
+~positionFollower.set(\out, ~buses[\infiniteReverbPA]);
+~positionFollower.set(\out, ~buses[\reverb1PA]);
+~positionFollower.set(\out, ~buses[\grainPan]);
+~positionFollower.set(\out, ~buses[\externalSend1]);
+\reverb1PA
 
 
+~buses.keys
+-> Set[ reverb0PA, rissetFX, reverb1Vib, stresonVib, stresonSurr, panAzCircle, positionRissetFollowerFX, infiniteReverbPA, reverb0Vib, reverb0Surr, infiniteReverbVib, infiniteReverbSurr, stresonPA, reverb1PA, reverb1Surr, grainPan, movingQFX, externalSend1 ]
 
 
 
@@ -498,16 +526,48 @@ Pbindef(\grainPanFxs).stop;
 
 
 
+// +++++++++++++++++++++++++++++++++++++++++++++++
+// ++   PERFORMANCE CACHICI:
+// +++++++++++++++++++++++++++++++++++++++++++++++
 
 (
 //morphFront
 Pbindef(\morphFront,  \out, ~buses[\positionRissetFollowerFX]).play;
 Pbindef(\morphFront).play;
+Pbindef(\morphFront, \sPos, Pdefn(\incrementally_0_to_1_millis_and_back).stutter(1));
+)
+
 Pbindef(\morphFront).stop;
 
-Pbindef(\morphFront, \sPos, Pdefn(\incrementally_0_to_1_millis_and_back).stutter(1));
 
+//presets!
+~callPreset.(1)
+~callPreset.(2)
+~callPreset.(3)
+~callPreset.(4)
+~callPreset.(5)
+~callPreset.(6)
+~callPreset.(7)
+~callPreset.(8)
+
+~logActiveSounds.();
+~probCycleDurSeconds = 0.1
+
+
+
+// 2- reset
+(
+if(~resetTriggerResponder.isNil){}{~resetTriggerResponder.free};
+~resetTriggerResponder = OSCFunc({ arg msg, time;
+	//[time, msg].postln;
+	case
+	{msg[2] == ~idResetTrig}{
+		Pbindef(\oneShotBuf).play;
+	}
+},'/tr');
 )
+Pbindef(\oneShotBuf, \out, Prand([~buses[\infiniteReverbPA], ~buses[\movingQFX]]));
+
 
 
 
