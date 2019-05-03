@@ -262,12 +262,10 @@ SynthDef(\grainPanAzFX, {
 }).add;
 
 "All synhtDefs created!".postln;
-)
 
 
-(
+
 //The Pbindefs
-
 Pbindef(\rissetSnares,
 	\instrument, \snareRisset,
 	\out, Pwrand([
@@ -391,7 +389,19 @@ if(~positionFollower.isNil){}{~positionFollower.free};
 ~positionFollower = Synth(\positionRissetFollowerFX, [
 	\in, ~buses[\positionRissetFollowerFX],
 	\out, ~buses[\externalSend1]
-], ~fxGrp)
+], ~fxGrp);
+
+"Singleton Fxs created".postln;
+
+
+
+Pbindef(\rissetFXs).play;
+Pbindef(\movingQFXs).play;
+Pbindef(\grainPanFxs).play;
+Pbindef(\surroundCircle4).play;
+
+"some FXs are already runnig :)".postln;
+s.plotTree;
 
 )
 
@@ -454,7 +464,7 @@ Pbindef(\movingQFXs,\out, Pwrand([~buses[\reverb1PA], ~buses[\infiniteReverbPA],
 
 //trigger on Reset
 (
-~resetTriggerResponder.free;
+if(~resetTriggerResponder.isNil){}{~resetTriggerResponder.free};
 ~resetTriggerResponder = OSCFunc({ arg msg, time;
 	//[time, msg].postln;
 	case
@@ -477,7 +487,6 @@ Pbindef(\movingQFXs,\out, Pwrand([~buses[\reverb1PA], ~buses[\infiniteReverbPA],
 //SPATIALIZING
 
 //Do it as pbind!!!
-
 Pbindef(\grainPanFxs).play;
 Pbindef(\surroundCircle4).play;
 
