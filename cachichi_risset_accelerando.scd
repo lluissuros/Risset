@@ -298,7 +298,7 @@ Pbindef(\rissetFXs,
 	\group, ~fxGrp,
 	\addAction, \addToHead,
 	\in, ~buses[\rissetFX],
-	\out, ~buses[\movingQFX],
+	\out, ~buses[\panAzCircle],
 	\dur, Pseq([5],inf),
 	\atk, Pseq([3], inf),
 	\sus, Pseq([4], inf),
@@ -567,10 +567,29 @@ Pbindef(\morphFront, \sPos, Pdefn(\incrementally_0_to_1_millis_and_back).stutter
 
 Pbindef(\morphFront, \amp, Pseq( [Pexprand(0.1,0.35,1), Pexprand(0.001,0.09,3)],inf) * Pkey(\prob) /9); //original : quite low
 
+//TODO DELETE
+Pbindef(\morphFront,  \out, 0).stop;
+
+Pbindef(\rissetSnares).play;
+Pbindef(\bufPlayer).play;
+Pbindef(\grainPanFxs).play;
+Pbindef(\surroundCircle4).play;
+Pbindef(\movingQFXs).play;
+Pbindef(\rissetFXs).play;
+
+
 
 ~positionFollower.set(\out, ~buses[\externalSend1]);
 )
 
+
+
+Pbindef(\rissetSnares).stop;
+Pbindef(\bufPlayer).stop;
+Pbindef(\grainPanFxs).stop;
+Pbindef(\surroundCircle4).stop;
+Pbindef(\movingQFXs).stop;
+Pbindef(\rissetFXs).stop;
 
 
 //presets!
@@ -589,6 +608,10 @@ Pbindef(\morphFront, \amp, Pseq( [Pexprand(0.1,0.35,1), Pexprand(0.001,0.09,3)],
 
 
 
+
+
+
+
 // 2- reset trig
 (
 if(~resetTriggerResponder.isNil){}{~resetTriggerResponder.free};
@@ -601,6 +624,28 @@ if(~resetTriggerResponder.isNil){}{~resetTriggerResponder.free};
 	}
 },'/tr');
 )
+
+
+//Pbindef(\oneShotBuf, \amp, Prand([0.1], 1));
+Pbindef(\oneShotBuf, \buf, Prand([
+	~findBufferByName.("entryGosh"),
+	~findBufferByName.("shakerSustain"),
+	~findBufferByName.("whale1"),
+	~findBufferByName.("whale2"),
+	~findBufferByName.("whale3"),
+	~findBufferByName.("whale4"),
+	~findBufferByName.("whale5"),
+	~findBufferByName.("whale6"),
+	~findBufferByName.("whale7"),
+	~findBufferByName.("whale8"),
+	~findBufferByName.("whale9"),
+	~findBufferByName.("whale10"),
+]));
+
+
+
+
+
 
 
 Pbindef(\oneShotBuf, \amp, Prand([0.1], 1));
