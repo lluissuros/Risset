@@ -141,7 +141,8 @@ SynthDef(\snareRisset, { |out=0, atk=1, sus=3, rel=9, amp=0.25, pan=0|
 
 
 //interesting sounds
-~beats_esc50 = [1084, 2, 630, 411, 611, 1050, 34, 1492];
+~beats_esc50 = [1084, 1089, 2, 630, 600, 601, 605, 619, 411, 611, 749, 759, 760, 761, 762,767, 777, 116, 117, 118, 120, 121, 127, 727, 737, 888, 112, 1050, 379, 378, 1111, 1115, 34, 1492, 1493, 1496];
+
 
 SynthDef(\simpleBufPlayerRiss, {
 	// it loops over and has a long envelope. If sPos changes sounds lees repetittive.
@@ -237,7 +238,7 @@ SynthDef(\extReturn1,{
 
 //SPATIALIZING: takes an input and spreads it around
 SynthDef(\surroundCircle4,{
-	|in, out=0, circleFreq=10, amp=0,
+	|in, out=0, circleFreq=10, amp=1,
 	atk=8, sus=8, rel=8|
 	var inL = In.ar(in, 1) * amp;
 	var inR = In.ar(in+1, 1) * amp;
@@ -280,15 +281,15 @@ Pbindef(\rissetSnares,
 
 Pbindef(\bufPlayer,
 	\instrument, \simpleBufPlayerRiss,
-	\buf, Pfunc({~getBufAt.({~beats_esc50.choose}.(),\esc50, true)}).stutter(4),
+	\buf, Pfunc({~getBufAt.({~beats_esc50.choose}.(),\esc50, true)}).stutter(3),
 	\out, ~buses[\rissetFX],
 	\dur, Pseq([5,10,15] ,inf),
-	\amp, Pseq([0.5, 0.2, 0.8]/15, inf),
+	\amp, Pseq([0.5, 0.2, 0.8]/5, inf),
 	\atk, 1,
 	\sus,8,
 	\rel, 8,
-	//\gated, Pwrand([0,1], [4, 1].normalizeSum, inf),
-	\gated, 1,
+	\gated, Pwrand([0,1], [4, 1].normalizeSum, inf),
+	//\gated, 1,
 );
 
 
@@ -333,8 +334,9 @@ Pbindef(\oneShotBuf,
 	\rel, 2,
 	\gated, 0,
 	\loop, 0,
-	\amp, Prand([0, 0.01, 0.05, 0.1], 1),
-	\out, Prand([~buses[\infiniteReverbPA], ~buses[\movingQFX]]),
+	\amp, Prand([0.1], 1),
+	//\out, Prand([~buses[\infiniteReverbPA], ~buses[\movingQFX]]),
+	\out, ~buses[\panAzCircle],
 );
 
 
@@ -357,17 +359,31 @@ Pbindef(\surroundCircle4,
 	\group, ~spatializersGrp,
 	\addAction, \addToTail,
 	\in, ~buses[\panAzCircle],
-	\out, 0,
-	\dur, Pseq([2], inf),
+	\out, ~buses[\infiniteReverbPA],
+	//\out, 0,
+	\dur, Pseq([1,2,3,4], inf),
 	\atk, 1.5,
 	\sus, 1.5,
 	\rel, 1.5,
-	\circleFreq, Pbrown(1,10,0.05, inf),
+	\circleFreq, Pseq((1..10), inf),
 );
 
 
 "All Pbindefs created".postln;
 
+
+Pbindef(\rissetFXs).play;
+Pbindef(\movingQFXs).play;
+Pbindef(\grainPanFxs).play;
+Pbindef(\surroundCircle4).play;
+
+"some FXs are already runnig :)".postln;
+s.plotTree;
+
+)
+
+(
+//this goes later, we need to wait a bit -> TODO do it programatically!
 
 //TODO: sometime gives error!!
 //send to pedals and return
@@ -381,7 +397,9 @@ if(~send1ToPedals.isNil){}{~send1ToPedals.free};
 if(~return1.isNil){}{~return1.free};
 ~return1 = Synth(\extReturn1, [
 	\in, 2,
-	\out, ~buses[\reverb1PA],
+//	\out, ~buses[\reverb1Quad],
+//	\out, ~buses[\infiniteReverbQuad], //ugly
+	\out, ~buses[\panAzCircle],
 ], ~externalGrp, \addToTail);
 
 
@@ -395,15 +413,11 @@ if(~positionFollower.isNil){}{~positionFollower.free};
 
 "Singleton Fxs created".postln;
 
+)
 
 
-Pbindef(\rissetFXs).play;
-Pbindef(\movingQFXs).play;
-Pbindef(\grainPanFxs).play;
-Pbindef(\surroundCircle4).play;
+(
 
-"some FXs are already runnig :)".postln;
-s.plotTree;
 
 )
 
@@ -416,10 +430,17 @@ s.plotTree;
 
 //risset snares
 Pbindef(\rissetSnares).play;
+Pbindef(\rissetSnares).stop;
 
 Pbindef(\rissetSnares, \out, Pwrand([
 	~buses[\reverb1PA],  ~buses[\infiniteReverbPA], ~buses[\movingQFX], ~buses[\externalSend1]],
 [2,1,2,1].normalizeSum, inf));
+
+
+
+Pbindef(\rissetSnares, \out, ~buses[\panAzCircle]);
+Pbindef(\rissetSnares, \out, ~buses[\grainPan]);
+
 
 
 
@@ -433,13 +454,20 @@ Pbindef(\bufPlayer, \out, ~buses[\reverb1PA]);
 Pbindef(\bufPlayer, \out, ~buses[\rissetFX]);
 Pbindef(\bufPlayer, \out, ~buses[\positionRissetFollowerFX]);
 
+//4chan
+Pbindef(\bufPlayer, \out, ~buses[\panAzCircle]);
+Pbindef(\bufPlayer, \out, ~buses[\grainPan]);
+
+
+
 Pbindef(\bufPlayer, \buf, ~getBufAt.(630));
-Pbindef(\bufPlayer, \buf, ~getRandBuf.(\birds));
+Pbindef(\bufPlayer, \buf, ~getRandBuf.(\esc50));
 Pbindef(\bufPlayer, \buf, Pfunc({~getBufAt.({~beats_esc50.choose}.(),\esc50, true)}).stutter(1));
 Pbindef(\bufPlayer, \pan, Pseq(Array.series(21, -1, 0.1) ,inf));
 Pbindef(\bufPlayer, \pan, Pseq([1] ,inf));
 
 Pbindef(\bufPlayer, \amp, Pseq([0.5] ,inf));
+
 
 
 
@@ -462,8 +490,9 @@ Pbindef(\movingQFXs).play;
 
 Pbindef(\movingQFXs,\out, Pwrand([~buses[\reverb1PA], ~buses[\infiniteReverbPA], ~buses[\externalSend1]], [2,1,1].normalizeSum, inf));
 
-Pbindef(\movingQFXs, \pan, 1)
-Pbindef(\movingQFXs, \out, 0)
+
+
+
 
 //trigger on Reset
 (
@@ -476,24 +505,13 @@ if(~resetTriggerResponder.isNil){}{~resetTriggerResponder.free};
 	}
 },'/tr');
 )
-(
-Pbindef(\oneShotBuf,
-	\instrument, \simpleBufPlayer,
-	\buf, ~findBufferByName.("entryGosh"),
-	\atk, 1,
-	\sus, 2,
-	\rel, 2,
-	\amp, Prand([0, 0.01, 0.05, 0.1], 1),
-	\out, Prand([~buses[\infiniteReverbPA], ~buses[\movingQFX]]),
-));
+
 //only one shot so Pseq will always give the first!
 Pbindef(\oneShotBuf, \out, Prand([~buses[\infiniteReverbPA]]));
 Pbindef(\oneShotBuf, \out, Prand([~buses[\movingQFX]]));
-Pbindef(\oneShotBuf, \out, Prand([~buses[\infiniteReverbPA], ~buses[\movingQFX]]));
+Pbindef(\oneShotBuf, \out, Prand([~buses[\infiniteReverbQuad], ~buses[\movingQFX]]));
 Pbindef(\oneShotBuf, \amp, Prand([0.1], 1));
 Pbindef(\oneShotBuf, \buf, Prand([ ~findBufferByName.("entryGosh"), ~findBufferByName.("shakerSustain")]));
-
-
 
 
 
@@ -502,13 +520,17 @@ Pbindef(\oneShotBuf, \buf, Prand([ ~findBufferByName.("entryGosh"), ~findBufferB
 ~positionFollower.set(\out, ~buses[\rissetFX]);
 ~positionFollower.set(\out, ~buses[\infiniteReverbPA]);
 ~positionFollower.set(\out, ~buses[\reverb1PA]);
-~positionFollower.set(\out, ~buses[\grainPan]);
 ~positionFollower.set(\out, ~buses[\externalSend1]);
+
+~positionFollower.set(\out, ~buses[\grainPan]);
+~positionFollower.set(\out, ~buses[\panAzCircle]);
+
 \reverb1PA
 
 
 ~buses.keys
--> Set[ reverb0PA, rissetFX, reverb1Vib, stresonVib, stresonSurr, panAzCircle, positionRissetFollowerFX, infiniteReverbPA, reverb0Vib, reverb0Surr, infiniteReverbVib, infiniteReverbSurr, stresonPA, reverb1PA, reverb1Surr, grainPan, movingQFX, externalSend1 ]
+-> Set[ reverb0Surr, grainPan, panAzCircle, reverb1Quad, rissetFX, reverb1Surr, positionRissetFollowerFX, infiniteReverbPA, externalSend1, reverb0Vib, stresonVib, reverb1Vib, movingQFX, stresonSurr, infiniteReverbSurr, infiniteReverbQuad, reverb0PA, reverb1PA, infiniteReverbVib, stresonPA ]
+
 
 
 
@@ -517,6 +539,13 @@ Pbindef(\oneShotBuf, \buf, Prand([ ~findBufferByName.("entryGosh"), ~findBufferB
 //Do it as pbind!!!
 Pbindef(\grainPanFxs).play;
 Pbindef(\surroundCircle4).play;
+
+//to quad reverbs
+Pbindef(\grainPanFxs, \out, Prand([\infiniteReverbQuad, \reverb1Quad]));
+Pbindef(\surroundCircle4, \out, Prand([\infiniteReverbQuad, \reverb1Quad]));
+
+
+
 
 Pbindef(\surroundCircle4).play;
 Pbindef(\grainPanFxs).stop;
@@ -533,11 +562,15 @@ Pbindef(\grainPanFxs).stop;
 (
 //morphFront
 Pbindef(\morphFront,  \out, ~buses[\positionRissetFollowerFX]).play;
-Pbindef(\morphFront).play;
+//Pbindef(\morphFront).play;
 Pbindef(\morphFront, \sPos, Pdefn(\incrementally_0_to_1_millis_and_back).stutter(1));
+
+Pbindef(\morphFront, \amp, Pseq( [Pexprand(0.1,0.35,1), Pexprand(0.001,0.09,3)],inf) * Pkey(\prob) /9); //original : quite low
+
+
+~positionFollower.set(\out, ~buses[\externalSend1]);
 )
 
-Pbindef(\morphFront).stop;
 
 
 //presets!
@@ -552,10 +585,11 @@ Pbindef(\morphFront).stop;
 
 ~logActiveSounds.();
 ~probCycleDurSeconds = 0.1
+~probCycleDurSeconds = 10
 
 
 
-// 2- reset
+// 2- reset trig
 (
 if(~resetTriggerResponder.isNil){}{~resetTriggerResponder.free};
 ~resetTriggerResponder = OSCFunc({ arg msg, time;
@@ -563,12 +597,60 @@ if(~resetTriggerResponder.isNil){}{~resetTriggerResponder.free};
 	case
 	{msg[2] == ~idResetTrig}{
 		Pbindef(\oneShotBuf).play;
+		"shot".postln;
 	}
 },'/tr');
 )
+
+
+Pbindef(\oneShotBuf, \amp, Prand([0.1], 1));
+Pbindef(\oneShotBuf, \amp, Prand([0, 0.01, 0.05, 0.1, 0.1], 1));
+//only one shot so Pseq will always give the first!
+Pbindef(\oneShotBuf, \out, Prand([~buses[\infiniteReverbPA]]));
+Pbindef(\oneShotBuf, \out, Prand([~buses[\movingQFX]]));
 Pbindef(\oneShotBuf, \out, Prand([~buses[\infiniteReverbPA], ~buses[\movingQFX]]));
 
+Pbindef(\oneShotBuf, \amp, Prand([0.1], 1));
+Pbindef(\oneShotBuf, \buf, Prand([ ~findBufferByName.("entryGosh"), ~findBufferByName.("shakerSustain")]));
 
 
 
+
+// 3 - change params on morph and Fxs
+Pbindef(\morphFront, \out, Pwrand([ ~buses[\reverb1PA], ~buses[\rissetFX], ~buses[\infiniteReverbPA], ~buses[\movingQFX], ~buses[\externalSend1]], [2,1,1,2,1].normalizeSum, inf).stutter(100));
+
+~callPreset.(8);
+
+Pbindef(\oneShotBuf, \amp, Prand([0, 0.01, 0.05, 0.1, 0.15], 1));
+
+Pbindef(\movingQFXs,\out, Pwrand([~buses[\reverb1PA], ~buses[\infiniteReverbPA], ~buses[\externalSend1]], [2,1,1].normalizeSum, inf).stutter(3).trace);
+
+Pbindef(\morphFront, \out, ~buses[\positionRissetFollowerFX]);
+
+
+
+
+
+
+//4 - introduce risset!
+Pbindef(\bufPlayer).play;
+Pbindef(\bufPlayer, \amp, Pseq([0.5, 0.2, 0.8]/8, inf));
+Pbindef(\bufPlayer, \amp, Pseq([0.5, 0.2, 0.8]/2, inf));
+Pbindef(\bufPlayer, \amp, Pseq([0.5, 0.2, 0.8], inf));
+
+//Pbindef(\bufPlayer).stop;
+
+//5-
+Pbindef(\morphFront, \amp, Pseq( [Pexprand(0.1,0.35,1), Pexprand(0.001,0.09,3)],inf) * Pkey(\prob) /5); //original : quite low
+Pbindef(\morphFront, \out, ~buses[\rissetFX]);
+
+
+
+
+
+//6- stop
+Pbindef(\morphFront).stop;
+Pbindef(\bufPlayer).stop;
+if(~resetTriggerResponder.isNil){}{~resetTriggerResponder.free};
+Pbindef(\rissetSnares).stop;
 
